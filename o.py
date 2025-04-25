@@ -37,7 +37,6 @@ model = Sequential([
     Dense(64, activation='relu'),
     Dense(1, activation='sigmoid')
 ])
-
 model.compile(optimizer='adam',
              loss='binary_crossentropy',
              metrics=['accuracy'])
@@ -61,7 +60,6 @@ def classify_image(image_path):
     img_array = keras.utils.img_to_array(img)
     img_array = np.expand_dims(img_array, axis=0)
     img_array = img_array / 255.0  # Normalize
-
     prediction = model.predict(img_array)
     class_label = (prediction[0][0] > 0.5).astype(int)
     return class_label
