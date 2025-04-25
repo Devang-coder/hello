@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prediction Result</title>
+</head>
+<body>
+    <h1>Prediction Result</h1>
+
+    <p>Image Path: {{ image_path }}</p>
+    <p>Prediction: {{ result }}</p>
+    <p>Confidence: {{ confidence * 100 }}%</p>
+
+    <h2>Uploaded Image:</h2>
+    <img src="{{ image_path }}" alt="Uploaded Image" width="300">
+
+    <br><br>
+    <a href="/">Go back to upload another image</a>
+</body>
+</html>
