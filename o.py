@@ -4,10 +4,8 @@ import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import Sequential, layers
 import matplotlib.pyplot as plt
-import h5py  # Required for model saving
-
-# Constants
-IMAGE_SIZE = (64, 64)  # Optimal size for memory and performance
+import h5py
+IMAGE_SIZE = (64, 64)
 BATCH_SIZE = 8  # Small batch size for limited memory
 EPOCHS = 10  # Increased epochs for better learning
 BASE_DIR = 'Data_Anuj'  # Main data directory

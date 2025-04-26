@@ -1,17 +1,7 @@
-﻿# Core ML (pinned to last Python 3.8-compatible versions)
-tensorflow-cpu==2.6.0
+﻿tensorflow-cpu==2.6.0
 keras==2.6.0
-h5py==3.1.0
-protobuf==3.20.3  # Updated for security but still compatible
-
-# Flask Stack
+numpy==1.19.5
+protobuf==3.20.3
 flask==2.0.3
-werkzeug==2.0.3
-blinker==1.4
-gunicorn==20.1.0
-
-# Utilities
-numpy==1.19.5  # Last version fully compatible with TF 2.6
-matplotlib==3.5.3
-pyparsing==2.4.7
-pillow==8.3.1  # Version tested with TF 2.6
+pillow==8.3.1
+h5py==3.1.0
