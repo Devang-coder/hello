@@ -25,13 +25,13 @@ def home():
 def predict():
     file = request.files['file']
     if file:
-        # Save the uploaded file
+        # Save the uploaded file with a unique name to avoid overwriting
         filepath = os.path.join(UPLOAD_FOLDER, file.filename)
         file.save(filepath)
 
         # Preprocess the image
-        img = image.load_img(filepath, target_size=(256, 256))
-        img_array = image.img_to_array(img) / 255.0
+        img = image.load_img(filepath, target_size=(64, 64))  # Resize to 64x64 to match model input
+        img_array = image.img_to_array(img) / 255.0  # Normalize the image
         img_array = np.expand_dims(img_array, axis=0)
 
         # Get prediction from the model
@@ -44,5 +44,7 @@ def predict():
                                result=result,
                                confidence=float(prediction),
                                image_path=filepath)
+    return "No file uploaded", 400
+
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
