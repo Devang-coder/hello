@@ -1,6 +1,6 @@
 import os
 import numpy as np
-from flask import Flask, render_template, request, send_from_directory
+from flask import Flask, render_template, request, send_from_directory, jsonify
 from tensorflow.keras.models import load_model
 from tensorflow.keras.preprocessing import image
 from werkzeug.utils import secure_filename
@@ -39,15 +39,51 @@ def init_model():
 def serve_static(path):
     return send_from_directory('static', path)
 
-# Routes (keep your existing route handlers)
 @app.route('/')
 def home():
     return render_template('index.html')
 
 @app.route('/predict', methods=['POST'])
 def predict():
-    # [Keep your existing predict() function unchanged]
-    pass
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file uploaded'}), 400
+
+    file = request.files['file']
+
+    if file.filename == '':
+        return jsonify({'error': 'No selected file'}), 400
+
+    if file and allowed_file(file.filename):
+        try:
+            # Secure filename and save temporarily
+            filename = secure_filename(file.filename)
+            filepath = os.path.join(UPLOAD_FOLDER, filename)
+            file.save(filepath)
+
+            # Preprocess the image
+            img = image.load_img(filepath, target_size=(224, 224))
+            img_array = image.img_to_array(img)
+            img_array = np.expand_dims(img_array, axis=0)
+            img_array /= 255.0  # Normalize
+
+            # Make prediction
+            prediction = model.predict(img_array)
+            result = 'Dysgraphia Detected' if prediction[0][0] > 0.5 else 'No Dysgraphia Detected'
+            confidence = float(prediction[0][0]) if prediction[0][0] > 0.5 else float(1 - prediction[0][0])
+
+            # Clean up
+            if os.path.exists(filepath):
+                os.remove(filepath)
+
+            return jsonify({
+                'result': result,
+                'confidence': round(confidence * 100, 2)
+            })
+
+        except Exception as e:
+            return jsonify({'error': f'Prediction failed: {str(e)}'}), 500
+
+    return jsonify({'error': 'Invalid file type'}), 400
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
