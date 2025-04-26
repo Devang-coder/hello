@@ -6,11 +6,16 @@
       "use": "@vercel/python",
       "config": {
         "runtime": "python3.8",
-        "includeFiles": ["dysgraphia_model.h5"]
+        "includeFiles": [
+          "templates/**",
+          "static/**",
+          "dysgraphia_model.h5",
+          "app.py"
+        ]
       }
     },
     {
-      "src": "static/*",
+      "src": "static/**",
       "use": "@vercel/static"
     }
   ],
@@ -21,6 +26,10 @@
     },
     {
       "src": "/(.*)",
+      "dest": "api/index.py"
+    },
+    {
+      "src": "/.*",
       "dest": "api/index.py"
     }
   ]
