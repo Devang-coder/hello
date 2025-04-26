@@ -6,57 +6,58 @@ from tensorflow.keras import Sequential
 from tensorflow.keras.layers import Dense, Conv2D, MaxPool2D, Flatten
 import matplotlib.pyplot as plt
 
-# Further reduce image size to 64x64 to save memory
-IMAGE_SIZE = (64, 64)  # Resize images to 64x64 to save more memory
-BATCH_SIZE = 16
+# Define constants
+IMAGE_SIZE = (64, 64)  # Resize images to 64x64 to save memory
+BATCH_SIZE = 8  # Reduced batch size to 8 for memory optimization
 BASE_DIR = 'Data_Anuj'  # The main directory
 
-# Load and preprocess datasets (Train and Test directories)
-train_ds = keras.utils.image_dataset_from_directory(
-    directory=os.path.join(BASE_DIR, 'Train'),
-    labels='inferred',
-    label_mode='int',
-    batch_size=BATCH_SIZE,
-    image_size=IMAGE_SIZE
-)
-
-validation_ds = keras.utils.image_dataset_from_directory(
-    directory=os.path.join(BASE_DIR, 'Test'),
-    labels='inferred',
-    label_mode='int',
-    batch_size=BATCH_SIZE,
-    image_size=IMAGE_SIZE
-)
-
-# Normalize the images to scale the pixel values between 0 and 1
+# Function to preprocess image data
 def process(image, label):
     image = tf.cast(image / 255.0, tf.float32)  # Normalize the image to [0,1]
     return image, label
 
-# Map, cache, and prefetch for optimized pipeline
-train_ds = train_ds.map(process).cache().shuffle(100).prefetch(buffer_size=tf.data.AUTOTUNE)
-validation_ds = validation_ds.map(process).cache().prefetch(buffer_size=tf.data.AUTOTUNE)
+# Function to get dataset from directory
+def get_dataset(data_dir):
+    return keras.utils.image_dataset_from_directory(
+        directory=data_dir,
+        labels='inferred',
+        label_mode='int',
+        batch_size=BATCH_SIZE,
+        image_size=IMAGE_SIZE
+    ).map(process).cache().shuffle(100).prefetch(buffer_size=tf.data.AUTOTUNE)
+
+# Load and preprocess datasets (Train and Test directories)
+train_ds = get_dataset(os.path.join(BASE_DIR, 'Train'))
+validation_ds = get_dataset(os.path.join(BASE_DIR, 'Test'))
 
 # Reduce the model complexity (fewer filters and units)
 model = Sequential([
-    Conv2D(8, kernel_size=(3, 3), activation='relu', input_shape=(64, 64, 3)),  # Fewer filters
+    Conv2D(8, kernel_size=(3, 3), activation='relu', input_shape=(64, 64, 3)),
     MaxPool2D(pool_size=(2, 2)),
-    Conv2D(16, kernel_size=(3, 3), activation='relu'),  # Fewer filters
+    Conv2D(16, kernel_size=(3, 3), activation='relu'),
     MaxPool2D(pool_size=(2, 2)),
     Flatten(),
-    Dense(16, activation='relu'),  # Fewer units in Dense layer
-    Dense(1, activation='sigmoid')  # Output layer for binary classification (Dysgraphia/Non-Dysgraphia)
+    Dense(16, activation='relu'),
+    Dense(1, activation='sigmoid')  # Output layer for binary classification
 ])
 
+# Compile the model
 model.compile(optimizer='adam',
               loss='binary_crossentropy',
               metrics=['accuracy'])
 
-# Train the model (start with fewer epochs for quicker training and less memory)
+# Model training with checkpoint to save best model
+checkpoint = tf.keras.callbacks.ModelCheckpoint('dysgraphia_model.h5',
+                                                 save_best_only=True,
+                                                 monitor='val_accuracy',
+                                                 mode='max')
+
+# Train the model (start with fewer epochs to reduce training time and memory usage)
 history = model.fit(
     train_ds,
-    epochs=5,  # Start with fewer epochs to reduce training time and memory usage
-    validation_data=validation_ds
+    epochs=5,  # Start with fewer epochs
+    validation_data=validation_ds,
+    callbacks=[checkpoint]  # Save the best model based on validation accuracy
 )
 
 # Plot training and validation accuracy
@@ -69,47 +70,33 @@ plt.ylabel('Accuracy')
 plt.legend()
 plt.show()
 
-# Save the trained model
-model.save('dysgraphia_model.h5')
-print("Model saved as 'dysgraphia_model.h5'")
-
 # Function to classify a new image
 def classify_image(image_path):
-    # Ensure the image is resized to 64x64 during inference
     img = keras.utils.load_img(image_path, target_size=IMAGE_SIZE)  # Resize to 64x64
-    img_array = keras.utils.img_to_array(img)
+    img_array = keras.utils.img_to_array(img) / 255.0  # Normalize the image
     img_array = np.expand_dims(img_array, axis=0)  # Add batch dimension
-    img_array = img_array / 255.0  # Normalize the image
     prediction = model.predict(img_array)
-    class_label = (prediction[0][0] > 0.5).astype(int)  # Threshold the prediction at 0.5
-    return class_label
+    return (prediction[0][0] > 0.5).astype(int)  # Return predicted class
+
+# Function to classify images in a directory
+def classify_images_in_directory(directory):
+    for img_name in os.listdir(directory):
+        img_path = os.path.join(directory, img_name)
+        if os.path.exists(img_path):
+            predicted_class = classify_image(img_path)
+            class_name = 'Dysgraphia' if predicted_class == 0 else 'Non-Dysgraphia'
+            print(f"{img_name} is classified as {class_name}.")
+        else:
+            print(f"Image not found at: {img_path}")
 
 # Test image paths (adjust path based on your test set structure)
 dyslexic_folder = os.path.join('Data_Anuj', 'Test', 'dyslexic')
 non_dyslexic_folder = os.path.join('Data_Anuj', 'Test', 'non_dyslexic')
 
-# Iterate over all images in 'Test/dyslexic' folder
+# Classify images in 'Test/dyslexic' folder
 print("Classifying images in 'Test/dyslexic' folder:")
-for img_name in os.listdir(dyslexic_folder):
-    img_path = os.path.join(dyslexic_folder, img_name)
-    if os.path.exists(img_path):
-        predicted_class = classify_image(img_path)
-        if predicted_class == 0:
-            print(f"{img_name} is classified as Dysgraphia.")
-        else:
-            print(f"{img_name} is classified as Non-Dysgraphia.")
-    else:
-        print(f"Image not found at: {img_path}")
+classify_images_in_directory(dyslexic_folder)
 
-# Iterate over all images in 'Test/non_dyslexic' folder
+# Classify images in 'Test/non_dyslexic' folder
 print("\nClassifying images in 'Test/non_dyslexic' folder:")
-for img_name in os.listdir(non_dyslexic_folder):
-    img_path = os.path.join(non_dyslexic_folder, img_name)
-    if os.path.exists(img_path):
-        predicted_class = classify_image(img_path)
-        if predicted_class == 0:
-            print(f"{img_name} is classified as Dysgraphia.")
-        else:
-            print(f"{img_name} is classified as Non-Dysgraphia.")
-    else:
-        print(f"Image not found at: {img_path}")
+classify_images_in_directory(non_dyslexic_folder)
