@@ -11,7 +11,7 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 # Dynamically find the model path
 MODEL_PATH = os.path.join(os.getcwd(), 'dysgraphia_model.tflite')
-
+print(MODEL_PATH)
 # Load the TFLite model
 class Predictor:
     def __init__(self, model_path):
@@ -38,41 +38,41 @@ def allowed_file(filename):
 def index():
     return render_template('index.html')
 
-@app.route('/predict', methods=['POST'])
-def predict():
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file uploaded'}), 400
-
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({'error': 'No selected file'}), 400
-
-    if file and allowed_file(file.filename):
-        filename = secure_filename(file.filename)
-        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-
-        # Create folder if doesn't exist
-        os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-        file.save(file_path)
-
-        try:
-            img = tf.keras.preprocessing.image.load_img(file_path, target_size=(64, 64))
-            img_array = tf.keras.preprocessing.image.img_to_array(img)
-            img_array = np.expand_dims(img_array, axis=0) / 255.0
-
-            prediction = predictor.predict(img_array)
-            result = 'Dysgraphia Detected' if prediction > 0.5 else 'No Dysgraphia Detected'
-            confidence = round((prediction if prediction > 0.5 else 1 - prediction) * 100, 2)
-
-            return render_template('result.html',
-                                   result=result,
-                                   confidence=confidence / 100,
-                                   image_path='/' + file_path)
-        except Exception as e:
-            return jsonify({'error': f'Prediction failed: {str(e)}'}), 500
-
-    else:
-        return jsonify({'error': 'Allowed file types: png, jpg, jpeg'}), 400
+# @app.route('/predict', methods=['POST'])
+# def predict():
+#     if 'file' not in request.files:
+#         return jsonify({'error': 'No file uploaded'}), 400
+#
+#     file = request.files['file']
+#     if file.filename == '':
+#         return jsonify({'error': 'No selected file'}), 400
+#
+#     if file and allowed_file(file.filename):
+#         filename = secure_filename(file.filename)
+#         file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+#
+#         # Create folder if doesn't exist
+#         os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+#         file.save(file_path)
+#
+#         try:
+#             img = tf.keras.preprocessing.image.load_img(file_path, target_size=(64, 64))
+#             img_array = tf.keras.preprocessing.image.img_to_array(img)
+#             img_array = np.expand_dims(img_array, axis=0) / 255.0
+#
+#             prediction = predictor.predict(img_array)
+#             result = 'Dysgraphia Detected' if prediction > 0.5 else 'No Dysgraphia Detected'
+#             confidence = round((prediction if prediction > 0.5 else 1 - prediction) * 100, 2)
+#
+#             return render_template('result.html',
+#                                    result=result,
+#                                    confidence=confidence / 100,
+#                                    image_path='/' + file_path)
+#         except Exception as e:
+#             return jsonify({'error': f'Prediction failed: {str(e)}'}), 500
+#
+#     else:
+#         return jsonify({'error': 'Allowed file types: png, jpg, jpeg'}), 400
 
 if __name__ == '__main__':
     app.run(debug=True)
