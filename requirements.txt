@@ -1,7 +1,9 @@
 ﻿tensorflow-cpu==2.6.0
 keras==2.6.0
-numpy==1.19.5
+numpy==1.21.6  # Updated for Python 3.8 compatibility
 protobuf==3.20.3
 flask==2.0.3
-pillow==8.3.1
-h5py==3.1.0
+pillow==9.0.1  # Updated for security patches
+h5py==3.7.0  # Updated for better tensorflow compatibility
+gunicorn==20.1.0  # Required for Vercel deployment
+werkzeug==2.0.3  # Pinned to match flask

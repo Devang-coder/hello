@@ -3,56 +3,42 @@ import numpy as np
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import Sequential, layers
+from tensorflow.keras.preprocessing import image
 import matplotlib.pyplot as plt
-import h5py
+
+# Constants
 IMAGE_SIZE = (64, 64)
-BATCH_SIZE = 8  # Small batch size for limited memory
-EPOCHS = 10  # Increased epochs for better learning
-BASE_DIR = 'Data_Anuj'  # Main data directory
+BATCH_SIZE = 8
+EPOCHS = 10
+BASE_DIR = 'Data_Anuj'
 
-# Data preprocessing function
-def preprocess(image, label):
-    image = tf.image.convert_image_dtype(image, tf.float32)  # More efficient normalization
-    return image, label
-
-# Dataset loader with improved settings
+# 1. Data Loading
 def load_dataset(data_dir, subset=None):
     return keras.utils.image_dataset_from_directory(
         directory=data_dir,
         labels='inferred',
-        label_mode='binary',  # Better for binary classification
+        label_mode='binary',
         batch_size=BATCH_SIZE,
         image_size=IMAGE_SIZE,
         validation_split=0.2 if subset == 'validation' else None,
         subset=subset,
         seed=42
-    ).map(preprocess).cache().prefetch(buffer_size=tf.data.AUTOTUNE)
+    ).map(lambda x, y: (x/255.0, y)).cache().prefetch(buffer_size=tf.data.AUTOTUNE)
 
-# Load datasets with validation split
-train_ds = load_dataset(os.path.join(BASE_DIR, 'Train'))
-val_ds = load_dataset(os.path.join(BASE_DIR, 'Train'), subset='validation')
-test_ds = load_dataset(os.path.join(BASE_DIR, 'Test'))
-
-# Enhanced model architecture
+# 2. Model Architecture
 def create_model():
     model = Sequential([
-        layers.Rescaling(1./255, input_shape=(*IMAGE_SIZE, 3)),  # Built-in normalization
-
-        # Feature extraction
-        layers.Conv2D(16, 3, padding='same', activation='relu'),
+        layers.Conv2D(16, 3, padding='same', activation='relu', input_shape=(*IMAGE_SIZE, 3)),
         layers.MaxPooling2D(),
         layers.Conv2D(32, 3, padding='same', activation='relu'),
         layers.MaxPooling2D(),
         layers.Conv2D(64, 3, padding='same', activation='relu'),
         layers.MaxPooling2D(),
-
-        # Classification
         layers.Flatten(),
         layers.Dense(128, activation='relu'),
-        layers.Dropout(0.2),  # Regularization
+        layers.Dropout(0.2),
         layers.Dense(1, activation='sigmoid')
     ])
-
     model.compile(optimizer='adam',
                 loss='binary_crossentropy',
                 metrics=['accuracy',
@@ -60,86 +46,127 @@ def create_model():
                         keras.metrics.Recall(name='recall')])
     return model
 
-model = create_model()
+# 3. Training Function
+def train_model():
+    train_ds = load_dataset(os.path.join(BASE_DIR, 'Train'))
+    val_ds = load_dataset(os.path.join(BASE_DIR, 'Train'), subset='validation')
 
-# Callbacks for better training
-early_stopping = keras.callbacks.EarlyStopping(patience=3, restore_best_weights=True)
-model_checkpoint = keras.callbacks.ModelCheckpoint('best_model.keras',
-                                                 save_best_only=True,
-                                                 monitor='val_accuracy')
+    model = create_model()
 
-# Training with validation
-history = model.fit(
-    train_ds,
-    validation_data=val_ds,
-    epochs=EPOCHS,
-    callbacks=[early_stopping, model_checkpoint]
-)
+    callbacks = [
+        keras.callbacks.EarlyStopping(patience=3, restore_best_weights=True),
+        keras.callbacks.ModelCheckpoint('best_model.keras', save_best_only=True)
+    ]
 
-# Evaluation on test set
-print("\nEvaluating on test set:")
-test_results = model.evaluate(test_ds)
-print(f"Test Accuracy: {test_results[1]:.2%}")
-print(f"Test Precision: {test_results[2]:.2%}")
-print(f"Test Recall: {test_results[3]:.2%}")
+    history = model.fit(
+        train_ds,
+        validation_data=val_ds,
+        epochs=EPOCHS,
+        callbacks=callbacks
+    )
 
-# Visualization
-def plot_training(history):
+    # Plot training history
     plt.figure(figsize=(12, 4))
-
     plt.subplot(1, 2, 1)
     plt.plot(history.history['accuracy'], label='Train Accuracy')
     plt.plot(history.history['val_accuracy'], label='Validation Accuracy')
     plt.title('Accuracy')
     plt.legend()
-
     plt.subplot(1, 2, 2)
     plt.plot(history.history['loss'], label='Train Loss')
     plt.plot(history.history['val_loss'], label='Validation Loss')
     plt.title('Loss')
     plt.legend()
-
-    plt.tight_layout()
     plt.show()
 
-plot_training(history)
+    return model
 
-# Prediction functions
-def predict_image(image_path, model, threshold=0.5):
-    img = keras.utils.load_img(image_path, target_size=IMAGE_SIZE)
-    img_array = keras.utils.img_to_array(img)
-    img_array = tf.expand_dims(img_array, 0)  # Create batch axis
+# 4. TFLite Conversion
+def convert_to_tflite():
+    model = keras.models.load_model('best_model.keras')
+    converter = tf.lite.TFLiteConverter.from_keras_model(model)
+    converter.optimizations = [tf.lite.Optimize.DEFAULT]
+    tflite_model = converter.convert()
+    with open('dysgraphia_model.tflite', 'wb') as f:
+        f.write(tflite_model)
+    print("Model converted to TFLite format")
 
-    prediction = model.predict(img_array)[0][0]
-    return 'Dysgraphia' if prediction < threshold else 'Non-Dysgraphia', prediction
+# 5. Evaluation Class
+class DysgraphiaEvaluator:
+    def __init__(self, model_path='best_model.keras'):
+        self.model_path = model_path
+        self.is_tflite = model_path.endswith('.tflite')
 
-def evaluate_test_set(test_dir, model):
-    class_names = ['dyslexic', 'non_dyslexic']
-    results = {class_name: {'correct': 0, 'total': 0} for class_name in class_names}
+        if self.is_tflite:
+            self.interpreter = tf.lite.Interpreter(model_path=model_path)
+            self.interpreter.allocate_tensors()
+            self.input_details = self.interpreter.get_input_details()
+            self.output_details = self.interpreter.get_output_details()
+        else:
+            self.model = keras.models.load_model(model_path)
 
-    for class_name in class_names:
-        class_dir = os.path.join(test_dir, class_name)
-        for img_file in os.listdir(class_dir):
-            img_path = os.path.join(class_dir, img_file)
-            true_label = 'Dysgraphia' if class_name == 'dyslexic' else 'Non-Dysgraphia'
+    def predict_image(self, image_path, threshold=0.5):
+        img = image.load_img(image_path, target_size=IMAGE_SIZE)
+        img_array = image.img_to_array(img)
+        img_array = np.expand_dims(img_array, axis=0) / 255.0
 
-            pred_label, confidence = predict_image(img_path, model)
-            results[class_name]['total'] += 1
-            if pred_label == true_label:
-                results[class_name]['correct'] += 1
+        if self.is_tflite:
+            self.interpreter.set_tensor(
+                self.input_details[0]['index'],
+                img_array.astype(np.float32)
+            )
+            self.interpreter.invoke()
+            prediction = self.interpreter.get_tensor(
+                self.output_details[0]['index'])[0][0]
+        else:
+            prediction = self.model.predict(img_array)[0][0]
 
-            print(f"{img_file}: Predicted {pred_label} ({confidence:.2%}) | Actual {true_label}")
+        label = 'Dysgraphia' if prediction < threshold else 'Non-Dysgraphia'
+        return label, float(prediction)
 
-    # Print summary
-    print("\nEvaluation Summary:")
-    for class_name in class_names:
-        acc = results[class_name]['correct'] / results[class_name]['total']
-        print(f"{class_name}: {results[class_name]['correct']}/{results[class_name]['total']} ({acc:.2%})")
+    def evaluate_test_set(self, test_dir):
+        class_names = ['dyslexic', 'non_dyslexic']
+        results = {class_name: {'correct': 0, 'total': 0}
+                 for class_name in class_names}
 
-# Load best saved model
-best_model = keras.models.load_model('best_model.keras')
+        for class_name in class_names:
+            class_dir = os.path.join(test_dir, class_name)
+            for img_file in os.listdir(class_dir):
+                img_path = os.path.join(class_dir, img_file)
+                true_label = 'Dysgraphia' if class_name == 'dyslexic' else 'Non-Dysgraphia'
 
-# Evaluate on test set
-test_dir = os.path.join(BASE_DIR, 'Test')
-print("\nRunning evaluation on test set:")
-evaluate_test_set(test_dir, best_model)
+                try:
+                    pred_label, confidence = self.predict_image(img_path)
+                    results[class_name]['total'] += 1
+                    if pred_label == true_label:
+                        results[class_name]['correct'] += 1
+                    print(f"{img_file}: Predicted {pred_label} ({confidence:.2%}) | Actual {true_label}")
+                except Exception as e:
+                    print(f"Error processing {img_file}: {str(e)}")
+
+        print("\nEvaluation Summary:")
+        for class_name in class_names:
+            acc = results[class_name]['correct'] / results[class_name]['total']
+            print(f"{class_name}: {results[class_name]['correct']}/{results[class_name]['total']} ({acc:.2%})")
+
+# Main Execution
+if __name__ == '__main__':
+    # Train if no model exists
+    if not os.path.exists('best_model.keras'):
+        print("Training new model...")
+        train_model()
+
+    # Convert to TFLite (optional)
+    if not os.path.exists('dysgraphia_model.tflite'):
+        print("\nConverting to TFLite format...")
+        convert_to_tflite()
+
+    # Evaluate with Keras model
+    print("\nEvaluating with Keras model:")
+    keras_evaluator = DysgraphiaEvaluator('best_model.keras')
+    keras_evaluator.evaluate_test_set(os.path.join(BASE_DIR, 'Test'))
+
+    # Evaluate with TFLite model
+    print("\nEvaluating with TFLite model:")
+    tflite_evaluator = DysgraphiaEvaluator('dysgraphia_model.tflite')
+    tflite_evaluator.evaluate_test_set(os.path.join(BASE_DIR, 'Test'))

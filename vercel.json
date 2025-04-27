@@ -6,10 +6,12 @@
       "use": "@vercel/python",
       "config": {
         "runtime": "python3.8",
+        "maxLambdaSize": "50mb",
         "includeFiles": [
           "templates/**",
           "static/**",
-          "dysgraphia_model.h5",
+          "dysgraphia_model.tflite",
+          "api/requirements.txt",
           "app.py"
         ]
       }
@@ -25,11 +27,16 @@
       "dest": "/static/$1"
     },
     {
-      "src": "/(.*)",
+      "src": "/predict",
+      "methods": ["POST"],
       "dest": "api/index.py"
     },
     {
-      "src": "/.*",
+      "src": "/",
+      "dest": "app.py"
+    },
+    {
+      "src": "/api/(.*)",
       "dest": "api/index.py"
     }
   ]
