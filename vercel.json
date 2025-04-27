@@ -11,7 +11,7 @@
           "templates/**",
           "static/**",
           "dysgraphia_model.tflite",
-          "api/requirements.txt",
+          "requirements.txt",
           "app.py"
         ]
       }
