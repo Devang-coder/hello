@@ -1,5 +1,4 @@
 ﻿flask==2.0.3
 pillow==9.0.1  # Updated for security patches
-h5py==3.7.0  # Updated for better tensorflow compatibility
 gunicorn==20.1.0  # Required for Vercel deployment
 werkzeug==2.0.3  # Pinned to match flask
