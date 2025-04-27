@@ -27,7 +27,7 @@
       "dest": "/static/$1"
     },
     {
-      "src": "/predict",
+      "src": "/api/predict",
       "methods": ["POST"],
       "dest": "api/index.py"
     },
